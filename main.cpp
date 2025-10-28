@@ -2,6 +2,10 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <queue>
+#include <climits>
+#include <chrono>
+
 using namespace std;
 
 struct Graph {
@@ -68,6 +72,53 @@ bool read_graph(const string& filename, Graph& G) {
     return true;
 }
 
+struct Result {
+    long long cost = LLONG_MAX;
+    vector<int> path;
+    long long visited = 0;
+    long long ms = 0;
+    bool found = false;
+};
+
+vector<int> reconstruct(int s, int t, const vector<int>& parent){
+    vector<int> p;
+    if(t<0 || t>= (int)parent.size()) return p;
+    if(parent[t]==-1 && s!=t) return p;
+    for(int v=t; v!=-1; v=parent[v]) p.push_back(v);
+    reverse(p.begin(), p.end());
+    return p;
+}
+
+Result bfs_shortest(const Graph& G){
+    Result R;
+    auto t0 = chrono::steady_clock::now();
+
+    vector<int> dist(G.n, INT_MAX), parent(G.n,-1);
+    queue<int>q;
+    dist[G.s]=0; q.push(G.s);
+    while(!q.empty()){
+        int u=q.front(); q.pop();
+        R.visited++;
+        if(u==G.t) break;
+        for(auto [v,w]: G.adj[u]){
+            (void)w;
+            if(dist[v]==INT_MAX){
+                dist[v]=dist[u]+1;
+                parent[v]=u;
+                q.push(v);
+            }
+        }
+    }
+    if(dist[G.t]!=INT_MAX){
+        R.found = true;
+        R.cost = dist[G.t];
+        R.path = reconstruct(G.s, G.t, parent);
+    }
+    auto t1 = chrono::steady_clock::now();
+    R.ms = chrono::duration_cast<chrono::milliseconds>(t1-t0).count();
+    return R;
+}
+
 int main() {
     Graph G;
     if (read_graph("graf.txt", G)) {
@@ -75,5 +126,20 @@ int main() {
     } else {
         std::cerr << "Błąd przy wczytywaniu grafu.\n";
     }
+
+    Result R = bfs_shortest(G);
+    cout << "BFS" << endl;
+    cout << "Odwiedzone: " << R.visited << endl;
+    cout << "Czas: " << R.ms << endl;
+    cout << "Czy znaleziona: " << R.found << endl;
+    if (R.found) {
+        cout << "Koszt: " << bfs_shortest(G).cost << endl;
+        cout << "Ścieżka: ";
+        for(int i=0; i<R.path.size(); i++) {
+            if(R.path[i]==1) cout << R.path[i] << " ";
+            cout << R.path[i] << " ";
+        }
+    }
+
     return 0;
 }
