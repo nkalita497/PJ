@@ -196,7 +196,7 @@ int main(int argc, char** argv){
     if (argc == 1) {
         cout << "Wybierz algorytm (bfs/dijkstra/astar): ";
         cin >> algo;
-        cout << "Podaj nazwę pliku (np. graph.txt): ";
+        cout << "Podaj nazwę pliku (np. graph.txt) : ";
         cin >> input;
     } else {
         for(int i=1;i<argc;i++){
