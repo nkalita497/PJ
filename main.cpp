@@ -5,6 +5,7 @@
 #include <queue>
 #include <climits>
 #include <chrono>
+#include <algorithm> // Dla std::reverse
 
 using namespace std;
 
@@ -12,7 +13,15 @@ struct Graph {
     bool weighted = false;
     int n = 0, m = 0;
     int s = 0, t = 0;
-    vector<vector<pair<int,int>>> adj;
+    vector<vector<pair<int, long long>>> adj;
+};
+
+struct Result {
+    long long cost = -1;
+    vector<int> path;
+    long long visited = 0;
+    long long ms = 0;
+    bool found = false;
 };
 
 bool read_graph(const string& filename, Graph& G) {
@@ -34,9 +43,8 @@ bool read_graph(const string& filename, Graph& G) {
     in >> G.n >> G.m;
     in >> G.s >> G.t;
 
-    // Poprawiony warunek sprawdzający parametry
     if (G.n <= 0 || G.m < 0 || G.s < 0 || G.s >= G.n || G.t < 0 || G.t >= G.n) {
-        cerr << "Błędne parametry n/m/s/t\n";
+        cerr << "Błędne parametry n/m/s/t (n musi być > 0, s i t muszą być w zakresie [0, n-1]).\n";
         return false;
     }
 
@@ -46,45 +54,48 @@ bool read_graph(const string& filename, Graph& G) {
         int u, v;
         in >> u >> v;
         if(!in){
-            cerr << "Za mało krawędzi w pliku.\n";
+            cerr << "Za mało krawędzi w pliku (oczekiwano " << G.m << ").\n";
             return false;
         }
         if(u < 0 || u >= G.n || v < 0 || v >= G.n){
-            cerr << "Wierzchołki muszą być w przedziale [0, n-1]\n";
+            cerr << "Wierzchołki muszą być w przedziale [0, n-1]. Napotkano krawędź: " << u << " " << v << "\n";
             return false;
         }
 
+        long long w = 1; // Domyślna waga dla grafu nieważonego
         if(G.weighted){
-            int w;
             in >> w;
             if(!in){
-                cerr << "Brak wagi krawędzi.\n";
+                cerr << "Brak wagi krawędzi " << u << " " << v << " (wymagane dla grafu WEIGHTED).\n";
                 return false;
             }
-            G.adj[u].push_back({v, w});
-            G.adj[v].push_back({u, w});
-        } else {
-            G.adj[u].push_back({v, 1});
-            G.adj[v].push_back({u, 1});
+            if (w < 0) {
+                cerr << "Waga krawędzi nie może być ujemna. Napotkano wagę: " << w << "\n";
+                return false;
+            }
         }
+
+        G.adj[u].push_back({v, w});
+        G.adj[v].push_back({u, w});
     }
 
     return true;
 }
 
-struct Result {
-    long long cost = LLONG_MAX;
-    vector<int> path;
-    long long visited = 0;
-    long long ms = 0;
-    bool found = false;
-};
-
 vector<int> reconstruct(int s, int t, const vector<int>& parent){
     vector<int> p;
-    if(t<0 || t>= (int)parent.size()) return p;
-    if(parent[t]==-1 && s!=t) return p;
-    for(int v=t; v!=-1; v=parent[v]) p.push_back(v);
+    if(t<0 || t>= (int)parent.size() || (parent[t] == -1 && s != t)) {
+        return p;
+    }
+
+    for(int v=t; v!=-1; v=parent[v]) {
+        p.push_back(v);
+        if (p.size() > parent.size()) {
+            p.clear();
+            return p;
+        }
+    }
+
     reverse(p.begin(), p.end());
     return p;
 }
@@ -93,27 +104,36 @@ Result bfs_shortest(const Graph& G){
     Result R;
     auto t0 = chrono::steady_clock::now();
 
-    vector<int> dist(G.n, INT_MAX), parent(G.n,-1);
-    queue<int>q;
-    dist[G.s]=0; q.push(G.s);
+    vector<int> dist(G.n, INT_MAX);
+    vector<int> parent(G.n,-1);
+    queue<int> q;
+
+    dist[G.s] = 0;
+    q.push(G.s);
+
     while(!q.empty()){
-        int u=q.front(); q.pop();
+        int u = q.front();
+        q.pop();
         R.visited++;
-        if(u==G.t) break;
-        for(auto [v,w]: G.adj[u]){
+
+        if(u == G.t) break;
+
+        for(auto [v, w] : G.adj[u]){
             (void)w;
-            if(dist[v]==INT_MAX){
-                dist[v]=dist[u]+1;
-                parent[v]=u;
+            if(dist[v] == INT_MAX){
+                dist[v] = dist[u] + 1;
+                parent[v] = u;
                 q.push(v);
             }
         }
     }
-    if(dist[G.t]!=INT_MAX){
+
+    if(dist[G.t] != INT_MAX){
         R.found = true;
         R.cost = dist[G.t];
         R.path = reconstruct(G.s, G.t, parent);
     }
+
     auto t1 = chrono::steady_clock::now();
     R.ms = chrono::duration_cast<chrono::milliseconds>(t1-t0).count();
     return R;
@@ -126,62 +146,86 @@ Result dijkstra_shortest(const Graph& G){
 
     vector<long long> dist(G.n, INF);
     vector<int> parent(G.n, -1);
-    using State = pair<long long,int>;
-    priority_queue<State, vector<State>, greater<State>> pq;dist[G.s]=0; pq.push({0,G.s});
+    using State = pair<long long, int>;
+    priority_queue<State, vector<State>, greater<State>> pq;
+
+    dist[G.s] = 0;
+    pq.push({0, G.s});
+
     while(!pq.empty()){
-        auto [du,u]=pq.top(); pq.pop();
-        if(du!=dist[u]) continue;
+        auto [du, u] = pq.top();
+        pq.pop();
+
+        if(du > dist[u]) continue;
         R.visited++;
-        if(u==G.t) break;
-        for(auto [v,w]: G.adj[u]){
+
+        if(u == G.t) break;
+
+        for(auto [v, w] : G.adj[u]){
             long long nd = du + w;
             if(nd < dist[v]){
-                dist[v]=nd;
-                parent[v]=u;
-                pq.push({nd,v});
+                dist[v] = nd;
+                parent[v] = u;
+                pq.push({nd, v});
             }
         }
     }
+
     if(dist[G.t] != INF){
         R.found = true;
         R.cost = dist[G.t];
         R.path = reconstruct(G.s, G.t, parent);
     }
+
     auto t1 = chrono::steady_clock::now();
     R.ms = chrono::duration_cast<chrono::milliseconds>(t1-t0).count();
     return R;
 }
+
 
 Result astar_zero(const Graph& G){
     Result R;
     auto t0 = chrono::steady_clock::now();
     const long long INF = (1LL<<60);
 
-    vector<long long> g(G.n, INF);
+    vector<long long> g(G.n, INF); // g(u) - faktyczny koszt od S do U
     vector<int> parent(G.n, -1);
-    using State = pair<long long,int>;
+    using State = pair<long long, int>;
     priority_queue<State, vector<State>, greater<State>> open;
 
-    g[G.s]=0; open.push({0,G.s});
+    auto heuristic = [](int u, int t) {
+        (void)u; (void)t;
+        return 0LL;
+    };
+
+    g[G.s] = 0;
+    open.push({g[G.s] + heuristic(G.s, G.t), G.s});
+
     while(!open.empty()){
-        auto [f,u]=open.top(); open.pop();
-        if(f!=g[u]) continue;
+        auto [f, u] = open.top();
+        open.pop();
+
+        if(f != g[u] + heuristic(u, G.t)) continue;
+
         R.visited++;
-        if(u==G.t) break;
-        for(auto [v,w]: G.adj[u]){
-            long long ng = g[u] + w;
+        if(u == G.t) break;
+
+        for(auto [v, w] : G.adj[u]){
+            long long ng = g[u] + w; // Nowy koszt do v
             if(ng < g[v]){
-                g[v]=ng;
-                parent[v]=u;
-                open.push({ng, v});
+                g[v] = ng;
+                parent[v] = u;
+                open.push({ng + heuristic(v, G.t), v});
             }
         }
     }
+
     if(g[G.t] != INF){
         R.found = true;
         R.cost = g[G.t];
         R.path = reconstruct(G.s, G.t, parent);
     }
+
     auto t1 = chrono::steady_clock::now();
     R.ms = chrono::duration_cast<chrono::milliseconds>(t1-t0).count();
     return R;
@@ -193,13 +237,13 @@ int main(int argc, char** argv){
 
     string algo, input;
 
-    if (argc == 1) {
+    if (argc < 2) {
         cout << "Wybierz algorytm (bfs/dijkstra/astar): ";
         cin >> algo;
         cout << "Podaj nazwę pliku (np. graph.txt) : ";
         cin >> input;
     } else {
-        for(int i=1;i<argc;i++){
+        for(int i=1; i<argc; i++){
             string a = argv[i];
             if(a=="--algo" && i+1<argc) algo = argv[++i];
             else if(a=="--input" && i+1<argc) input = argv[++i];
@@ -217,7 +261,7 @@ int main(int argc, char** argv){
     Result R;
     if(algo=="bfs"){
         if(G.weighted){
-            cerr << "BFS tylko dla UNWEIGHTED (nieważone). Użyj dijkstra/astar.\n";
+            cerr << "BFS działa poprawnie tylko dla UNWEIGHTED (lub ważonych jedynkami). Dla grafu ważonego użyj dijkstra/astar.\n";
             return 3;
         }
         R = bfs_shortest(G);
@@ -230,19 +274,24 @@ int main(int argc, char** argv){
         return 4;
     }
 
+    cout << "--- WYNIK DLA ALGO: " << algo << " ---\n";
+    cout << "Graf (N/M/S/T): " << G.n << "/" << G.m << "/" << G.s << "/" << G.t << "\n";
+
     if(!R.found){
-        cout << "NO PATH\n";
+        cout << "STATUS: NO PATH\n";
     } else {
+        cout << "STATUS: PATH FOUND\n";
         cout << "COST: " << R.cost << "\n";
-        cout << "PATH: ";
+        cout << "PATH (" << R.path.size() << " nodes): ";
         for(size_t i=0;i<R.path.size();++i){
             if(i) cout << " ";
             cout << R.path[i];
         }
         cout << "\n";
     }
-    cout << "VISITED: " << R.visited << "\n";
-    cout << "TIME_MS: " << R.ms << "\n";
+    cout << "METRICS:\n";
+    cout << "  VISITED NODES: " << R.visited << "\n";
+    cout << "  TIME_MS: " << R.ms << "\n";
 
     return 0;
 }
