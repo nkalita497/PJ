@@ -5,7 +5,8 @@
 #include <queue>
 #include <climits>
 #include <chrono>
-#include <algorithm> // Dla std::reverse
+#include <algorithm>
+#include <iomanip>
 
 using namespace std;
 
@@ -231,34 +232,104 @@ Result astar_zero(const Graph& G){
     return R;
 }
 
+void print_result_row(const string& name, const Result& R) {
+    cout << left << setw(10) << name;
+
+    if (!R.found) {
+        cout << setw(8) << "NO"
+             << setw(10) << "-"
+             << setw(12) << R.visited
+             << setw(10) << R.ms
+             << "\n";
+    } else {
+        cout << setw(8)  << "YES"
+             << setw(10) << R.cost
+             << setw(12) << R.visited
+             << setw(10) << R.ms
+             << "\n";
+    }
+}
+
+void compare_algorithms(const Graph& G) {
+    cout << "--- PORÓWNANIE ALGORYTMÓW NA TYM SAMYM GRAFIE ---\n";
+    cout << "Graf (N/M/S/T): " << G.n << "/" << G.m << "/" << G.s << "/" << G.t << "\n\n";
+
+    Result Rbfs, Rdij, Rast;
+    bool can_bfs = !G.weighted;
+
+    if (can_bfs) {
+        Rbfs = bfs_shortest(G);
+    }
+
+    Rdij = dijkstra_shortest(G);
+    Rast = astar_zero(G);
+
+    cout << left << setw(10) << "ALGO"
+         << setw(8)  << "FOUND"
+         << setw(10) << "COST"
+         << setw(12) << "VISITED"
+         << setw(10) << "TIME_MS"
+         << "\n";
+
+    cout << string(50, '-') << "\n";
+
+    if (can_bfs) {
+        print_result_row("bfs", Rbfs);
+    } else {
+        cout << left << setw(10) << "bfs"
+             << setw(8)  << "N/A"
+             << setw(10) << "-"
+             << setw(12) << "-"
+             << setw(10) << "-"
+             << "\n";
+    }
+
+    print_result_row("dijkstra", Rdij);
+    print_result_row("astar",    Rast);
+}
+
 int main(int argc, char** argv){
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
     string algo, input;
+    bool compare_mode = false;
 
     if (argc < 2) {
-        cout << "Wybierz algorytm (bfs/dijkstra/astar): ";
+        cout << "Wybierz algorytm (bfs/dijkstra/astar lub compare): ";
         cin >> algo;
         cout << "Podaj nazwę pliku (np. graph.txt) : ";
         cin >> input;
+        if (algo == "compare") compare_mode = true;
     } else {
-        for(int i=1; i<argc; i++){
+        for(int i = 1; i < argc; i++){
             string a = argv[i];
-            if(a=="--algo" && i+1<argc) algo = argv[++i];
-            else if(a=="--input" && i+1<argc) input = argv[++i];
+            if(a == "--algo" && i + 1 < argc) algo = argv[++i];
+            else if(a == "--input" && i + 1 < argc) input = argv[++i];
+            else if(a == "--compare") compare_mode = true;
         }
     }
 
-    if(algo.empty() || input.empty()){
-        cerr << "Użycie: sp --algo bfs|dijkstra|astar --input plik.txt\n";
+    if (input.empty()){
+        cerr << "Użycie: sp --algo bfs|dijkstra|astar [--compare] --input plik.txt\n";
         return 1;
     }
 
     Graph G;
     if(!read_graph(input, G)) return 2;
 
+    if (compare_mode) {
+        compare_algorithms(G);
+        return 0;
+    }
+
+    if(algo.empty()){
+        cerr << "Użycie: sp --algo bfs|dijkstra|astar --input plik.txt\n";
+        return 1;
+    }
+
     Result R;
+
     if(algo=="bfs"){
         if(G.weighted){
             cerr << "BFS działa poprawnie tylko dla UNWEIGHTED (lub ważonych jedynkami). Dla grafu ważonego użyj dijkstra/astar.\n";
@@ -283,14 +354,15 @@ int main(int argc, char** argv){
         cout << "STATUS: PATH FOUND\n";
         cout << "COST: " << R.cost << "\n";
         cout << "PATH (" << R.path.size() << " nodes): ";
-        for(size_t i=0;i<R.path.size();++i){
+        for(size_t i = 0; i < R.path.size(); ++i){
             if(i) cout << " ";
             cout << R.path[i];
         }
         cout << "\n";
     }
+
     cout << "METRICS:\n";
-    cout << "  VISITED NODES: " << R.visited << "\n";
+    cout << "  VISITED: " << R.visited << "\n";
     cout << "  TIME_MS: " << R.ms << "\n";
 
     return 0;
