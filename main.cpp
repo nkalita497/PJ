@@ -12,9 +12,11 @@ using namespace std;
 
 struct Graph {
     bool weighted = false;
+    bool has_coords = false;
     int n = 0, m = 0;
     int s = 0, t = 0;
     vector<vector<pair<int, long long>>> adj;
+    vector<pair<int, int>> coords;
 };
 
 struct Result {
@@ -34,10 +36,11 @@ bool read_graph(const string& filename, Graph& G) {
 
     string kind;
     in >> kind;
-    if(kind == "UNWEIGHTED") G.weighted = false;
-    else if(kind == "WEIGHTED") G.weighted = true;
+    if(kind == "UNWEIGHTED") { G.weighted = false; G.has_coords = false; }
+    else if(kind == "WEIGHTED") { G.weighted = true; G.has_coords = false; }
+    else if (kind == "WEIGHTED_XY") { G.weighted = true; G.has_coords = true; }
     else {
-        cerr << "Pierwsza linia musi być UNWEIGHTED albo WEIGHTED\n";
+        cerr << "Pierwsza linia musi być UNWEIGHTED, WEIGHTED albo WEIGHTED_XY\n";
         return false;
     }
 
@@ -45,36 +48,26 @@ bool read_graph(const string& filename, Graph& G) {
     in >> G.s >> G.t;
 
     if (G.n <= 0 || G.m < 0 || G.s < 0 || G.s >= G.n || G.t < 0 || G.t >= G.n) {
-        cerr << "Błędne parametry n/m/s/t (n musi być > 0, s i t muszą być w zakresie [0, n-1]).\n";
+        cerr << "Błędne parametry n/m/s/t.\n";
         return false;
     }
 
     G.adj.assign(G.n, {});
+    G.coords.assign(G.n, {0,0});
+
+    if (G.has_coords) {
+        for(int i=0; i<G.n; i++){
+            in >> G.coords[i].first >> G.coords[i].second;
+        }
+    }
 
     for(int i = 0; i < G.m; i++){
         int u, v;
         in >> u >> v;
-        if(!in){
-            cerr << "Za mało krawędzi w pliku (oczekiwano " << G.m << ").\n";
-            return false;
-        }
-        if(u < 0 || u >= G.n || v < 0 || v >= G.n){
-            cerr << "Wierzchołki muszą być w przedziale [0, n-1]. Napotkano krawędź: " << u << " " << v << "\n";
-            return false;
-        }
+        if(!in) break;
 
-        long long w = 1; // Domyślna waga dla grafu nieważonego
-        if(G.weighted){
-            in >> w;
-            if(!in){
-                cerr << "Brak wagi krawędzi " << u << " " << v << " (wymagane dla grafu WEIGHTED).\n";
-                return false;
-            }
-            if (w < 0) {
-                cerr << "Waga krawędzi nie może być ujemna. Napotkano wagę: " << w << "\n";
-                return false;
-            }
-        }
+        long long w = 1;
+        if(G.weighted) in >> w;
 
         G.adj[u].push_back({v, w});
         G.adj[v].push_back({u, w});
@@ -184,39 +177,49 @@ Result dijkstra_shortest(const Graph& G){
 }
 
 
-Result astar_zero(const Graph& G){
+Result astar(const Graph& G){
     Result R;
     auto t0 = chrono::steady_clock::now();
     const long long INF = (1LL<<60);
 
-    vector<long long> g(G.n, INF); // g(u) - faktyczny koszt od S do U
+    // Jeśli graf nie ma współrzędnych, A* zamienia się w Dijkstrę (h=0)
+    // Heurystyka Manhattan: |x1-x2| + |y1-y2|
+    auto heuristic = [&](int u, int target) -> long long {
+        if (!G.has_coords) return 0;
+        long long dx = abs(G.coords[u].first - G.coords[target].first);
+        long long dy = abs(G.coords[u].second - G.coords[target].second);
+        return dx + dy; // Możesz tu dodać mnożnik, np. * 1.001 dla "tie-breaking"
+    };
+
+    vector<long long> g(G.n, INF); // Koszt dojścia od startu
     vector<int> parent(G.n, -1);
+
+    // Pair: <f_score, node_index>, gdzie f = g + h
     using State = pair<long long, int>;
     priority_queue<State, vector<State>, greater<State>> open;
 
-    auto heuristic = [](int u, int t) {
-        (void)u; (void)t;
-        return 0LL;
-    };
-
     g[G.s] = 0;
-    open.push({g[G.s] + heuristic(G.s, G.t), G.s});
+    // Wrzucamy start z kosztem f = 0 + h(s)
+    open.push({heuristic(G.s, G.t), G.s});
 
     while(!open.empty()){
         auto [f, u] = open.top();
         open.pop();
 
-        if(f != g[u] + heuristic(u, G.t)) continue;
+        // Jeśli wyjęliśmy coś gorszego niż już mamy, pomiń
+        // Uwaga: w A* sprawdzamy g[u], a nie f
+        if (f > g[u] + heuristic(u, G.t)) continue;
 
         R.visited++;
-        if(u == G.t) break;
+        if(u == G.t) break; // Znaleziono cel!
 
         for(auto [v, w] : G.adj[u]){
-            long long ng = g[u] + w; // Nowy koszt do v
-            if(ng < g[v]){
-                g[v] = ng;
+            long long new_g = g[u] + w;
+            if(new_g < g[v]){
+                g[v] = new_g;
                 parent[v] = u;
-                open.push({ng + heuristic(v, G.t), v});
+                long long new_f = new_g + heuristic(v, G.t);
+                open.push({new_f, v});
             }
         }
     }
@@ -262,7 +265,7 @@ void compare_algorithms(const Graph& G) {
     }
 
     Rdij = dijkstra_shortest(G);
-    Rast = astar_zero(G);
+    Rast = astar(G);
 
     cout << left << setw(10) << "ALGO"
          << setw(8)  << "FOUND"
@@ -315,6 +318,10 @@ int main(int argc, char** argv){
         return 1;
     }
 
+    if (algo == "compare") {
+        compare_mode = true;
+    }
+
     Graph G;
     if(!read_graph(input, G)) return 2;
 
@@ -339,7 +346,7 @@ int main(int argc, char** argv){
     } else if(algo=="dijkstra"){
         R = dijkstra_shortest(G);
     } else if(algo=="astar"){
-        R = astar_zero(G);
+        R = astar(G);
     } else {
         cerr << "Nieznany algorytm: " << algo << "\n";
         return 4;
