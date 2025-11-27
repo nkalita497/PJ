@@ -3,4 +3,4 @@ project(PJ)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(PJ main.cpp)
+add_executable(PJ src/main.cpp)
