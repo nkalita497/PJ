@@ -24,14 +24,6 @@ Kompleksowe narzędzie do analizy i porównywania wydajności najpopularniejszyc
 
 Projekt nie wymaga zewnętrznych bibliotek — czysty standard C++.
 
-```bash
-# Sklonuj repozytorium
-git clone [https://github.com/twoj-uzytkownik/nazwa-projektu.git](https://github.com/twoj-uzytkownik/nazwa-projektu.git)
-cd nazwa-projektu
-# Skompiluj z flagą optymalizacji O3 dla najlepszej wydajności
-g++ Main.cpp -O3 -std=c++17 -o pathfinder
-```
----
 
 ##  Formaty Plików Wejściowych
 
