@@ -10,7 +10,7 @@ Kompleksowe narzędzie do analizy i porównywania wydajności najpopularniejszyc
 
 ##  Kluczowe Funkcje
 
-* **Trzy potężne algorytmy:**
+* **Trzy algorytmy:**
     * **BFS** – Optymalny dla grafów bez wag (znajduje ścieżkę z najmniejszą liczbą krawędzi).
     * **Dijkstra** – Gwarantuje najkrótszą ścieżkę w grafach z nieujemnymi wagami.
     * **A* (A-Star)** – Inteligentne wyszukiwanie z wykorzystaniem **heurystyki Manhattan** dla grafów z koordynatami XY.
